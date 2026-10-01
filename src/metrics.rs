@@ -11,10 +11,21 @@ pub struct RuntimeMetrics {
 }
 
 impl RuntimeMetrics {
-    pub fn submitted(&self) { self.submitted.fetch_add(1, Ordering::Relaxed); }
-    pub fn processed(&self) { self.processed.fetch_add(1, Ordering::Relaxed); }
-    pub fn retried(&self) { self.retried.fetch_add(1, Ordering::Relaxed); }
-    pub fn failed(&self) { self.failed.fetch_add(1, Ordering::Relaxed); }
+    pub fn submitted(&self) {
+        self.submitted.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn processed(&self) {
+        self.processed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn retried(&self) {
+        self.retried.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn failed(&self) {
+        self.failed.fetch_add(1, Ordering::Relaxed);
+    }
 
     pub fn queued(&self) {
         let depth = self.queue_depth.fetch_add(1, Ordering::Relaxed) + 1;
