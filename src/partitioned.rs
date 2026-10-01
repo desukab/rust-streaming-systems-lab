@@ -103,9 +103,7 @@ impl PartitionedEngine {
 
                 info!(
                     partition = partition_id,
-                    processed,
-                    retried,
-                    "partition stopped"
+                    processed, retried, "partition stopped"
                 );
                 (processed, retried)
             });
