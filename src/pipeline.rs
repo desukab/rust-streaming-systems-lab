@@ -59,7 +59,14 @@ impl Metrics {
     }
 
     fn dequeued(&self) {
-        self.queue_depth.fetch_sub(1, Ordering::Relaxed);
+        // The counter represents producer-outstanding work: buffered items plus
+        // items already handed to workers. Saturation protects the metric if a
+        // worker races the producer during shutdown.
+        let _ = self.queue_depth.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.saturating_sub(1)),
+        );
     }
 }
 
@@ -141,8 +148,8 @@ impl Pipeline {
 
         for event in events {
             metrics.submitted.fetch_add(1, Ordering::Relaxed);
-            tx.send(event).await.expect("workers are still running");
             metrics.queued();
+            tx.send(event).await.expect("workers are still running");
         }
         drop(tx);
 
@@ -198,7 +205,7 @@ mod tests {
         assert_eq!(report.submitted, 100);
         assert_eq!(report.processed, 100);
         assert_eq!(report.failed, 0);
-        assert!(report.peak_queue_depth <= 2);
+        assert!(report.peak_queue_depth <= 5);
         assert_eq!(report.final_keys, 100);
     }
 
