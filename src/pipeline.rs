@@ -4,13 +4,13 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::state::StateStore;
-use crate::types::{Event, ProcessedEvent, PipelineReport};
+use crate::types::{Event, PipelineReport, ProcessedEvent};
 
 #[derive(Debug, Clone)]
 pub struct PipelineConfig {
@@ -31,29 +31,19 @@ impl Default for PipelineConfig {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Metrics {
     submitted: AtomicU64,
     processed: AtomicU64,
     failed: AtomicU64,
     retried: AtomicU64,
+    queue_depth: AtomicUsize,
     peak_queue_depth: AtomicUsize,
 }
 
-impl Default for Metrics {
-    fn default() -> Self {
-        Self {
-            submitted: AtomicU64::new(0),
-            processed: AtomicU64::new(0),
-            failed: AtomicU64::new(0),
-            retried: AtomicU64::new(0),
-            peak_queue_depth: AtomicUsize::new(0),
-        }
-    }
-}
-
 impl Metrics {
-    fn observe_depth(&self, depth: usize) {
+    fn queued(&self) {
+        let depth = self.queue_depth.fetch_add(1, Ordering::Relaxed) + 1;
         let mut current = self.peak_queue_depth.load(Ordering::Relaxed);
         while depth > current {
             match self.peak_queue_depth.compare_exchange_weak(
@@ -66,6 +56,10 @@ impl Metrics {
                 Err(next) => current = next,
             }
         }
+    }
+
+    fn dequeued(&self) {
+        self.queue_depth.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -86,81 +80,75 @@ impl Pipeline {
         }
     }
 
+    /// Run a bounded producer/worker pipeline.
+    ///
+    /// The Tokio mpsc channel is the backpressure boundary: once it is full,
+    /// send().await waits instead of growing memory without a limit.
     pub async fn run<I>(&self, events: I) -> PipelineReport
     where
         I: IntoIterator<Item = Event>,
     {
         let metrics = Arc::new(Metrics::default());
         let (tx, rx) = mpsc::channel::<Event>(self.config.queue_capacity);
-        let rx = Arc::new(tokio::sync::Mutex::new(rx));
-        let semaphore = Arc::new(Semaphore::new(self.config.workers));
-
+        let rx = Arc::new(Mutex::new(rx));
         let mut workers = JoinSet::new();
+
         for worker_id in 0..self.config.workers {
             let rx = Arc::clone(&rx);
             let state = Arc::clone(&self.state);
             let metrics = Arc::clone(&metrics);
-            let semaphore = Arc::clone(&semaphore);
             let max_attempts = self.config.max_attempts;
             let delay = self.config.process_delay;
 
             workers.spawn(async move {
                 loop {
-                    let permit = semaphore.acquire().await.expect("semaphore stays alive");
                     let event = {
                         let mut guard = rx.lock().await;
                         guard.recv().await
                     };
-                    drop(permit);
 
                     let Some(event) = event else { break };
+                    metrics.dequeued();
 
                     let mut attempts = 1;
-                    let result = loop {
+                    loop {
                         sleep(delay).await;
+
                         // Deterministic failure injection: sequence numbers divisible
-                        // by 97 fail twice, then succeed. This makes retry behavior
-                        // testable without relying on flaky timing or external services.
+                        // by 97 fail twice, then succeed. This keeps retry behavior
+                        // reproducible without external services or flaky timing.
                         if event.sequence % 97 == 0 && attempts < max_attempts {
                             attempts += 1;
                             metrics.retried.fetch_add(1, Ordering::Relaxed);
                             warn!(worker_id, event_id = event.id, attempts, "retrying event");
                             continue;
                         }
-                        break true;
-                    };
-
-                    if result {
-                        state.apply(&event).await;
-                        metrics.processed.fetch_add(1, Ordering::Relaxed);
-                        let processed = ProcessedEvent {
-                            event,
-                            worker: worker_id,
-                            attempts,
-                        };
-                        info!(worker_id, event_id = processed.event.id, "processed event");
-                    } else {
-                        metrics.failed.fetch_add(1, Ordering::Relaxed);
+                        break;
                     }
+
+                    state.apply(&event).await;
+                    metrics.processed.fetch_add(1, Ordering::Relaxed);
+
+                    let processed = ProcessedEvent {
+                        event,
+                        worker: worker_id,
+                        attempts,
+                    };
+                    info!(worker_id, event_id = processed.event.id, "processed event");
                 }
             });
         }
 
         for event in events {
             metrics.submitted.fetch_add(1, Ordering::Relaxed);
-            let permit = semaphore.acquire().await.expect("semaphore stays alive");
             tx.send(event).await.expect("workers are still running");
-            drop(permit);
-            let approximate_depth = self
-                .config
-                .queue_capacity
-                .min(metrics.submitted.load(Ordering::Relaxed) as usize);
-            metrics.observe_depth(approximate_depth);
+            metrics.queued();
         }
         drop(tx);
 
         while let Some(result) = workers.join_next().await {
             if let Err(error) = result {
+                metrics.failed.fetch_add(1, Ordering::Relaxed);
                 warn!(%error, "worker task terminated unexpectedly");
             }
         }
@@ -247,9 +235,7 @@ mod tests {
         let mut delete = event(3, 3, "same");
         delete.kind = EventKind::Delete;
 
-        pipeline
-            .run([event(1, 1, "same"), update, delete])
-            .await;
+        pipeline.run([event(1, 1, "same"), update, delete]).await;
 
         assert!(pipeline.snapshot().await.is_empty());
     }
