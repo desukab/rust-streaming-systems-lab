@@ -30,6 +30,10 @@ impl StateStore {
         self.records.read().await.len()
     }
 
+    pub async fn is_empty(&self) -> bool {
+        self.records.read().await.is_empty()
+    }
+
     pub async fn snapshot(&self) -> HashMap<String, String> {
         self.records.read().await.clone()
     }
