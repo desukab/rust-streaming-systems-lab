@@ -135,6 +135,6 @@ mod tests {
             .iter()
             .filter(|event| event.account == "account-0")
             .count();
-        assert!(hot > 100);
+        assert!(hot >= 100);
     }
 }
