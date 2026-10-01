@@ -9,7 +9,8 @@ pub mod pipeline;
 pub mod state;
 pub mod types;
 
-pub use pipeline::{Pipeline, PipelineConfig, PipelineReport};
+pub use pipeline::{Pipeline, PipelineConfig};
+pub use types::PipelineReport;
 pub use types::{Event, EventKind, ProcessedEvent};
 
 pub use state::StateStore;
