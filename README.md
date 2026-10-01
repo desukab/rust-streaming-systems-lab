@@ -185,3 +185,96 @@ The project is designed to answer engineering questions with code and measuremen
 - Where does latency come from?
 
 The goal is not to maximize technology keywords. The goal is to make the trade-offs visible, testable, and explainable.
+
+## Long-running runtime
+
+The batch engine is now backed by a separate `StreamingRuntime` that keeps partition workers alive for the lifetime of a service.
+
+The runtime exposes:
+
+- bounded per-partition ingress with natural async backpressure
+- deterministic key → partition routing
+- one consumer per partition
+- idempotent event identity handling
+- stale-sequence rejection
+- materialized state + inverted search index
+- runtime health/readiness/metrics snapshots
+- WebSocket event fan-out
+- graceful **Running → Draining → Stopped** lifecycle
+- end-to-end enqueue-to-apply latency measurement
+
+The HTTP service is therefore not a toy handler that mutates a map directly. Requests enter the same bounded streaming runtime that owns ordering and state transitions.
+
+### Service surface
+
+```
+GET  /health
+GET  /ready
+GET  /metrics
+GET  /partitions
+POST /events
+GET  /record/:key
+GET  /search?q=term
+WS   /ws
+```
+
+Run it with:
+
+```
+cargo run --bin server
+```
+
+Example ingestion:
+
+```bash
+curl -X POST http://127.0.0.1:8080/events \
+  -H 'content-type: application/json' \
+  -d '{"key":"wallet-42","payload":"swap SOL USDC"}'
+```
+
+Then query the same materialized state:
+
+```bash
+curl http://127.0.0.1:8080/record/wallet-42
+curl 'http://127.0.0.1:8080/search?q=swap'
+curl http://127.0.0.1:8080/metrics
+```
+
+## Guarantees vs. non-goals
+
+| Property | Current lab |
+|---|---|
+| Per-key partition locality | Yes, fixed partition count |
+| Per-partition sequential consumer | Yes |
+| Bounded ingress | Yes |
+| Duplicate delivery handling | Yes, by event ID |
+| Stale sequence protection | Yes |
+| Concurrent partitions | Yes |
+| Materialized secondary index | Yes |
+| Runtime health/readiness | Yes |
+| WebSocket fan-out | Yes |
+| Graceful drain | Yes |
+| Replayable event log | Yes |
+| Checkpoint primitive | Yes |
+| Dynamic rebalancing | Not yet |
+| Crash-consistent distributed transactions | No |
+| Distributed consensus | No |
+| Exactly-once delivery | No |
+| Production Kafka/Redis/Postgres integration | Not claimed |
+
+This distinction is intentional: the repository demonstrates systems fundamentals without pretending that a local lab is a production distributed system.
+
+## Next engineering experiments
+
+The next layer is deliberately measurable rather than another pile of dependencies:
+
+1. **Load generation** — sustained producers, burst traffic, hot-key skew and controlled overload.
+2. **Tail latency** — p50/p95/p99 enqueue-to-apply measurements under different partition counts.
+3. **Failure injection** — worker crash, delayed partition, rejected ingress and corrupted checkpoint scenarios.
+4. **Property testing** — invariants for ordering, idempotency, index consistency and replay.
+5. **Persistence adapter** — benchmark a real PostgreSQL implementation against the in-memory materialized view.
+6. **Kafka-compatible ingestion** — explicit offset/ack semantics using a local Redpanda experiment.
+7. **Cache experiment** — Redis read-through cache with hit/miss and tail-latency measurements.
+8. **Profiling** — CPU, allocation and lock-contention measurements with flamegraphs.
+
+The project will only claim an integration after the integration is actually built, tested and measured.
