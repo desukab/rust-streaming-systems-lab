@@ -221,9 +221,21 @@ mod tests {
         ];
 
         let report = engine.run(events).await;
-
         assert_eq!(report.processed, 3);
         assert_eq!(engine.get("account-1").await.as_deref(), Some("third"));
+    }
+
+    #[tokio::test]
+    async fn duplicate_event_id_is_idempotent() {
+        let engine = PartitionedEngine::new(PartitionedConfig::default());
+        let first = event(7, "account-1", "first");
+        let duplicate = first.clone();
+
+        let report = engine.run([first, duplicate]).await;
+
+        assert_eq!(report.submitted, 2);
+        assert_eq!(report.processed, 1);
+        assert_eq!(engine.get("account-1").await.as_deref(), Some("first"));
     }
 
     #[tokio::test]
@@ -237,7 +249,6 @@ mod tests {
         ];
 
         engine.run(events).await;
-
         assert_eq!(engine.search("rust").await, vec!["a", "b"]);
     }
 }
