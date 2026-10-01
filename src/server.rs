@@ -1,7 +1,13 @@
-use std::sync::{atomic::{AtomicU64, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Path, Query, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -11,7 +17,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::partitioned::stable_partition;
-use crate::runtime::{RuntimeConfig, RuntimeSnapshot, RuntimeStatus, StreamingRuntime, SubmitError};
+use crate::runtime::{
+    RuntimeConfig, RuntimeSnapshot, RuntimeStatus, StreamingRuntime, SubmitError,
+};
 use crate::{Event, EventKind};
 
 #[derive(Clone)]
@@ -21,7 +29,9 @@ struct AppState {
 }
 
 #[derive(Debug, Deserialize)]
-struct SearchQuery { q: String }
+struct SearchQuery {
+    q: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct NewEvent {
@@ -62,7 +72,10 @@ pub fn router_with_config(config: RuntimeConfig) -> Router {
 
 async fn health(State(app): State<AppState>) -> Json<Health> {
     let runtime = app.runtime.snapshot().await;
-    Json(Health { status: "ok", runtime })
+    Json(Health {
+        status: "ok",
+        runtime,
+    })
 }
 
 async fn ready(State(app): State<AppState>) -> impl IntoResponse {
@@ -104,18 +117,30 @@ async fn ingest(State(app): State<AppState>, Json(input): Json<NewEvent>) -> imp
         Err(SubmitError::Draining | SubmitError::Closed) => (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({"error": "ingestion unavailable"})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
 async fn record(State(app): State<AppState>, Path(key): Path<String>) -> impl IntoResponse {
     match app.runtime.record(&key).await {
-        Some(value) => (StatusCode::OK, Json(serde_json::json!({"key": key, "value": value}))).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "record not found"}))).into_response(),
+        Some(value) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"key": key, "value": value})),
+        )
+            .into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "record not found"})),
+        )
+            .into_response(),
     }
 }
 
-async fn search(State(app): State<AppState>, Query(query): Query<SearchQuery>) -> Json<Vec<String>> {
+async fn search(
+    State(app): State<AppState>,
+    Query(query): Query<SearchQuery>,
+) -> Json<Vec<String>> {
     Json(app.runtime.search(&query.q).await)
 }
 
@@ -145,7 +170,12 @@ mod tests {
     #[tokio::test]
     async fn health_endpoint_reports_runtime() {
         let response = router()
-            .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -154,7 +184,12 @@ mod tests {
     #[tokio::test]
     async fn ready_endpoint_is_live() {
         let response = router()
-            .oneshot(Request::builder().uri("/ready").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::builder()
+                    .uri("/ready")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);

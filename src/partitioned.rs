@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::{mpsc, oneshot};
 use std::collections::{HashMap, HashSet};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -75,7 +75,7 @@ impl PartitionedEngine {
 
             workers.spawn(async move {
                 let mut processed = 0_u64;
-        let mut seen = HashSet::new();
+                let mut seen = HashSet::new();
                 let mut last_sequence: HashMap<String, u64> = HashMap::new();
                 let mut retried = 0_u64;
 

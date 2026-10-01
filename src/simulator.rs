@@ -17,7 +17,10 @@ impl ChainEvent {
             sequence: self.slot,
             kind: EventKind::Update,
             key: self.account,
-            payload: format!("program={} amount={} slot={}", self.program, self.amount, self.slot),
+            payload: format!(
+                "program={} amount={} slot={}",
+                self.program, self.amount, self.slot
+            ),
         }
     }
 }
@@ -57,10 +60,8 @@ pub fn generate_configured(config: WorkloadConfig) -> Vec<ChainEvent> {
     for slot in 0..config.blocks {
         for offset in 0..config.events_per_block {
             let transaction = slot * config.events_per_block + offset;
-            let burst_offset = transaction
-                .checked_div(config.burst_size)
-                .unwrap_or(0)
-                % config.accounts;
+            let burst_offset =
+                transaction.checked_div(config.burst_size).unwrap_or(0) % config.accounts;
 
             let hot = transaction % 100 < u64::from(config.hot_key_ratio);
             let account_number = if hot {
@@ -130,7 +131,10 @@ mod tests {
             hot_key_ratio: 80,
             burst_size: 10,
         });
-        let hot = events.iter().filter(|event| event.account == "account-0").count();
+        let hot = events
+            .iter()
+            .filter(|event| event.account == "account-0")
+            .count();
         assert!(hot > 100);
     }
 }

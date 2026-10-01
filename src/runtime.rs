@@ -159,7 +159,12 @@ impl StreamingRuntime {
                         let _ = ack.send(Ok(()));
                     }
 
-                    info!(partition = partition_id, event_id = command.event.id, attempts, "event applied");
+                    info!(
+                        partition = partition_id,
+                        event_id = command.event.id,
+                        attempts,
+                        "event applied"
+                    );
                 }
 
                 info!(partition = partition_id, "partition worker stopped");
@@ -201,7 +206,11 @@ impl StreamingRuntime {
         self.metrics.submitted();
         self.metrics.queued();
 
-        let command = Command { event, ack, enqueued_at: Instant::now() };
+        let command = Command {
+            event,
+            ack,
+            enqueued_at: Instant::now(),
+        };
         let senders = self.senders.lock().await;
         let sender = senders.as_ref().ok_or(SubmitError::Closed)?[partition].clone();
         drop(senders);
@@ -296,8 +305,14 @@ mod tests {
             ..RuntimeConfig::default()
         });
 
-        runtime.submit_and_wait(event(1, "account-1", 1)).await.unwrap();
-        assert_eq!(runtime.record("account-1").await.as_deref(), Some("value-1"));
+        runtime
+            .submit_and_wait(event(1, "account-1", 1))
+            .await
+            .unwrap();
+        assert_eq!(
+            runtime.record("account-1").await.as_deref(),
+            Some("value-1")
+        );
         runtime.shutdown().await;
     }
 
@@ -308,9 +323,18 @@ mod tests {
             ..RuntimeConfig::default()
         });
 
-        runtime.submit_and_wait(event(2, "account-1", 2)).await.unwrap();
-        runtime.submit_and_wait(event(1, "account-1", 1)).await.unwrap();
-        runtime.submit_and_wait(event(2, "account-1", 2)).await.unwrap();
+        runtime
+            .submit_and_wait(event(2, "account-1", 2))
+            .await
+            .unwrap();
+        runtime
+            .submit_and_wait(event(1, "account-1", 1))
+            .await
+            .unwrap();
+        runtime
+            .submit_and_wait(event(2, "account-1", 2))
+            .await
+            .unwrap();
 
         let snapshot = runtime.snapshot().await;
         assert_eq!(snapshot.processed, 1);

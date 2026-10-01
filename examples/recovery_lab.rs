@@ -14,25 +14,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let checkpoints = CheckpointStore::open(directory.join("checkpoints")).await?;
 
     let generated = simulator::generate(20, 25);
-    let events: Vec<_> = generated.into_iter().map(|event| event.into_event()).collect();
-    for event in &events { log.append(event).await?; }
+    let events: Vec<_> = generated
+        .into_iter()
+        .map(|event| event.into_event())
+        .collect();
+    for event in &events {
+        log.append(event).await?;
+    }
 
     let engine = PartitionedEngine::new(PartitionedConfig {
-        partitions: 8, queue_capacity_per_partition: 32, max_attempts: 3, process_delay: Duration::ZERO,
+        partitions: 8,
+        queue_capacity_per_partition: 32,
+        max_attempts: 3,
+        process_delay: Duration::ZERO,
     });
     let report = engine.run(events.iter().take(250).cloned()).await;
 
     for partition in 0..8 {
-        checkpoints.save(&Checkpoint { partition, sequence: 250 }).await?;
+        checkpoints
+            .save(&Checkpoint {
+                partition,
+                sequence: 250,
+            })
+            .await?;
     }
     println!("initial run: {report:?}");
 
     let replayed = log.replay().await?;
     let recovered = PartitionedEngine::new(PartitionedConfig {
-        partitions: 8, queue_capacity_per_partition: 32, max_attempts: 3, process_delay: Duration::ZERO,
+        partitions: 8,
+        queue_capacity_per_partition: 32,
+        max_attempts: 3,
+        process_delay: Duration::ZERO,
     });
     let recovery_report = recovered.run(replayed.into_iter().skip(250)).await;
     println!("recovery run: {recovery_report:?}");
-    println!("recovery complete: {} events replayed", recovery_report.processed);
+    println!(
+        "recovery complete: {} events replayed",
+        recovery_report.processed
+    );
     Ok(())
 }
