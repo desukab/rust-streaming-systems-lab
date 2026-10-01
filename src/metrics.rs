@@ -36,12 +36,19 @@ impl RuntimeMetrics {
 
     pub fn queue_depth(&self) -> usize { self.queue_depth.load(Ordering::Relaxed) }
     pub fn peak_queue_depth(&self) -> usize { self.peak_queue_depth.load(Ordering::Relaxed) }
+    pub fn submitted_count(&self) -> u64 { self.submitted.load(Ordering::Relaxed) }
     pub fn processed_count(&self) -> u64 { self.processed.load(Ordering::Relaxed) }
+    pub fn retried_count(&self) -> u64 { self.retried.load(Ordering::Relaxed) }
+    pub fn failed_count(&self) -> u64 { self.failed.load(Ordering::Relaxed) }
     pub fn duplicate_count(&self) -> u64 { self.duplicate.load(Ordering::Relaxed) }
+    pub fn stale_count(&self) -> u64 { self.stale.load(Ordering::Relaxed) }
+
     pub fn record_latency(&self, started: Instant) {
         self.latency_samples.fetch_add(1, Ordering::Relaxed);
-        self.latency_total_micros.fetch_add(started.elapsed().as_micros() as u64, Ordering::Relaxed);
+        self.latency_total_micros
+            .fetch_add(started.elapsed().as_micros() as u64, Ordering::Relaxed);
     }
+
     pub fn average_latency_micros(&self) -> u64 {
         let samples = self.latency_samples.load(Ordering::Relaxed);
         if samples == 0 { 0 } else { self.latency_total_micros.load(Ordering::Relaxed) / samples }
