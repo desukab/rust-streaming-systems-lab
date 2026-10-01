@@ -65,8 +65,7 @@ impl PartitionedEngine {
         let mut workers = JoinSet::new();
 
         for partition_id in 0..self.config.partitions {
-            let (tx, mut rx) =
-                mpsc::channel::<Command>(self.config.queue_capacity_per_partition);
+            let (tx, mut rx) = mpsc::channel::<Command>(self.config.queue_capacity_per_partition);
             senders.push(tx);
 
             let state = Arc::clone(&self.state);
@@ -102,7 +101,12 @@ impl PartitionedEngine {
                     let _ = command.done.send(());
                 }
 
-                info!(partition = partition_id, processed, retried, "partition stopped");
+                info!(
+                    partition = partition_id,
+                    processed,
+                    retried,
+                    "partition stopped"
+                );
                 (processed, retried)
             });
         }
