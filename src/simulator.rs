@@ -17,41 +17,84 @@ impl ChainEvent {
             sequence: self.slot,
             kind: EventKind::Update,
             key: self.account,
-            payload: format!(
-                "program={} amount={} slot={}",
-                self.program, self.amount, self.slot
-            ),
+            payload: format!("program={} amount={} slot={}", self.program, self.amount, self.slot),
         }
     }
 }
 
-/// Deterministic synthetic workload shaped like an on-chain event stream.
-///
-/// This is a simulator, not a Solana/EVM implementation. It exists to make
-/// ordering, partitioning, indexing, and burst behavior reproducible.
-pub fn generate(blocks: u64, events_per_block: u64) -> Vec<ChainEvent> {
-    let mut events = Vec::with_capacity((blocks * events_per_block) as usize);
+#[derive(Debug, Clone, Copy)]
+pub struct WorkloadConfig {
+    pub blocks: u64,
+    pub events_per_block: u64,
+    pub accounts: u64,
+    pub hot_key_ratio: u8,
+    pub burst_size: u64,
+}
 
-    for slot in 0..blocks {
-        for offset in 0..events_per_block {
-            let transaction = slot * events_per_block + offset;
+impl Default for WorkloadConfig {
+    fn default() -> Self {
+        Self {
+            blocks: 100,
+            events_per_block: 100,
+            accounts: 10_000,
+            hot_key_ratio: 10,
+            burst_size: 100,
+        }
+    }
+}
+
+/// Generate a reproducible event stream with configurable key skew and bursts.
+///
+/// This is intentionally a synthetic workload, not an implementation of a
+/// particular chain protocol.
+pub fn generate_configured(config: WorkloadConfig) -> Vec<ChainEvent> {
+    assert!(config.accounts > 0);
+    assert!(config.hot_key_ratio <= 100);
+
+    let total = config.blocks.saturating_mul(config.events_per_block);
+    let mut events = Vec::with_capacity(total as usize);
+
+    for slot in 0..config.blocks {
+        for offset in 0..config.events_per_block {
+            let transaction = slot * config.events_per_block + offset;
+            let burst_offset = if config.burst_size == 0 {
+                0
+            } else {
+                (transaction / config.burst_size) % config.accounts
+            };
+
+            let hot = transaction % 100 < u64::from(config.hot_key_ratio);
+            let account_number = if hot {
+                burst_offset
+            } else {
+                transaction % config.accounts
+            };
+
+            let program = match transaction % 3 {
+                0 => "swap",
+                1 => "transfer",
+                _ => "stake",
+            };
+
             events.push(ChainEvent {
                 slot,
                 transaction,
-                account: format!("account-{}", transaction % 10_000),
-                program: if transaction % 3 == 0 {
-                    "swap".into()
-                } else if transaction % 3 == 1 {
-                    "transfer".into()
-                } else {
-                    "stake".into()
-                },
+                account: format!("account-{account_number}"),
+                program: program.into(),
                 amount: (transaction * 7919) % 1_000_000,
             });
         }
     }
 
     events
+}
+
+pub fn generate(blocks: u64, events_per_block: u64) -> Vec<ChainEvent> {
+    generate_configured(WorkloadConfig {
+        blocks,
+        events_per_block,
+        ..WorkloadConfig::default()
+    })
 }
 
 #[cfg(test)]
@@ -77,5 +120,18 @@ mod tests {
         assert_eq!(converted.id, 99);
         assert_eq!(converted.sequence, 42);
         assert_eq!(converted.key, "account-1");
+    }
+
+    #[test]
+    fn hot_key_configuration_creates_skew() {
+        let events = generate_configured(WorkloadConfig {
+            blocks: 10,
+            events_per_block: 100,
+            accounts: 100,
+            hot_key_ratio: 80,
+            burst_size: 10,
+        });
+        let hot = events.iter().filter(|event| event.account == "account-0").count();
+        assert!(hot > 100);
     }
 }
