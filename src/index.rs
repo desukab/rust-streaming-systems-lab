@@ -64,6 +64,10 @@ impl IndexedState {
     pub async fn len(&self) -> usize {
         self.records.read().await.len()
     }
+
+    pub async fn is_empty(&self) -> bool {
+        self.records.read().await.is_empty()
+    }
 }
 
 fn tokens(value: &str) -> impl Iterator<Item = String> + '_ {
