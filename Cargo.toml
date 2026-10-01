@@ -16,6 +16,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 [dev-dependencies]
 criterion = { version = "0.7", features = ["html_reports"] }
 tempfile = "3"
+tower = "0.5"
 
 [[bench]]
 name = "pipeline"
