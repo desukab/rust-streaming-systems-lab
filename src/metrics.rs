@@ -22,7 +22,11 @@ impl RuntimeMetrics {
     }
 
     pub fn dequeued(&self) {
-        self.queue_depth.fetch_sub(1, Ordering::Relaxed);
+        let _ = self.queue_depth.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |depth| Some(depth.saturating_sub(1)),
+        );
     }
 
     pub fn peak_queue_depth(&self) -> usize {
