@@ -85,7 +85,7 @@ pub struct StreamingRuntime {
     state: Arc<IndexedState>,
     metrics: Arc<RuntimeMetrics>,
     status: std::sync::Arc<tokio::sync::RwLock<RuntimeStatus>>,
-    senders: Vec<mpsc::Sender<Command>>,
+    senders: tokio::sync::Mutex<Option<Vec<mpsc::Sender<Command>>>>,
     events: broadcast::Sender<Event>,
     workers: tokio::sync::Mutex<Option<JoinSet<()>>>,
 }
@@ -171,7 +171,7 @@ impl StreamingRuntime {
             state,
             metrics,
             status,
-            senders,
+            senders: tokio::sync::Mutex::new(Some(senders)),
             events,
             workers: tokio::sync::Mutex::new(Some(workers)),
         })
@@ -185,7 +185,7 @@ impl StreamingRuntime {
         self.submit_inner(event, true).await.map(|_| ())
     }
 
-    async fn submit_inner(&self, event: Event, wait: bool) -> Result<Option<oneshot::Receiver<Result<(), SubmitError>>>, SubmitError> {
+    async fn submit_inner(&self, event: Event, wait: bool) -> Result<(), SubmitError> {
         if *self.status.read().await != RuntimeStatus::Running {
             return Err(SubmitError::Draining);
         }
@@ -201,22 +201,18 @@ impl StreamingRuntime {
         self.metrics.submitted();
         self.metrics.queued();
 
-        let command = Command {
-            event,
-            ack,
-            enqueued_at: Instant::now(),
-        };
+        let command = Command { event, ack, enqueued_at: Instant::now() };
+        let senders = self.senders.lock().await;
+        let sender = senders.as_ref().ok_or(SubmitError::Closed)?[partition].clone();
+        drop(senders);
 
-        if self.senders[partition].send(command).await.is_err() {
+        if sender.send(command).await.is_err() {
             self.metrics.failed();
             return Err(SubmitError::Closed);
         }
 
-        if let Some(receiver) = receiver {
-            let _ = receiver.await;
-        }
-
-        Ok(None)
+        if let Some(receiver) = receiver { let _ = receiver.await; }
+        Ok(())
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
@@ -258,7 +254,7 @@ impl StreamingRuntime {
         }
 
         let mut workers_guard = self.workers.lock().await;
-        drop(self.senders.clone());
+        self.senders.lock().await.take();
 
         if let Some(mut workers) = workers_guard.take() {
             while workers.join_next().await.is_some() {}
