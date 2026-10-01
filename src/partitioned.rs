@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
+use std::collections::HashSet;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -74,6 +75,7 @@ impl PartitionedEngine {
 
             workers.spawn(async move {
                 let mut processed = 0_u64;
+        let mut seen = HashSet::new();
                 let mut retried = 0_u64;
 
                 while let Some(command) = rx.recv().await {
@@ -96,8 +98,10 @@ impl PartitionedEngine {
                         break;
                     }
 
-                    state.apply(&command.event).await;
-                    processed += 1;
+                    if seen.insert(command.event.id) {
+                        state.apply(&command.event).await;
+                        processed += 1;
+                    }
                     let _ = command.done.send(());
                 }
 
