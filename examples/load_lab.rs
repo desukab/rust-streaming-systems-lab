@@ -15,9 +15,18 @@ fn percentile(sorted: &[u64], p: f64) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let producers = std::env::var("PRODUCERS").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
-    let events_per_producer = std::env::var("EVENTS").ok().and_then(|v| v.parse().ok()).unwrap_or(2_000);
-    let partitions = std::env::var("PARTITIONS").ok().and_then(|v| v.parse().ok()).unwrap_or(16);
+    let producers = std::env::var("PRODUCERS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8);
+    let events_per_producer = std::env::var("EVENTS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2_000);
+    let partitions = std::env::var("PARTITIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(16);
 
     let runtime = StreamingRuntime::start(RuntimeConfig {
         partitions,
@@ -27,7 +36,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         ..RuntimeConfig::default()
     });
 
-    let latencies = Arc::new(Mutex::new(Vec::with_capacity(producers * events_per_producer)));
+    let latencies = Arc::new(Mutex::new(Vec::with_capacity(
+        producers * events_per_producer,
+    )));
     let started = Instant::now();
     let mut tasks = JoinSet::new();
 
@@ -49,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
                 let request_started = Instant::now();
                 runtime.submit_and_wait(event).await?;
-                latencies.lock().await.push(request_started.elapsed().as_micros() as u64);
+                latencies
+                    .lock()
+                    .await
+                    .push(request_started.elapsed().as_micros() as u64);
             }
             Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
         });
