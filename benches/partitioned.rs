@@ -1,7 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use rust_streaming_systems_lab::{
-    Event, EventKind, PartitionedConfig, PartitionedEngine,
-};
+use rust_streaming_systems_lab::{Event, EventKind, PartitionedConfig, PartitionedEngine};
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
