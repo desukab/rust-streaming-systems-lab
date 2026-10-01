@@ -81,10 +81,9 @@ impl RuntimeMetrics {
 
     pub fn average_latency_micros(&self) -> u64 {
         let samples = self.latency_samples.load(Ordering::Relaxed);
-        if samples == 0 {
-            0
-        } else {
-            self.latency_total_micros.load(Ordering::Relaxed) / samples
-        }
+        self.latency_total_micros
+            .load(Ordering::Relaxed)
+            .checked_div(samples)
+            .unwrap_or(0)
     }
 }
