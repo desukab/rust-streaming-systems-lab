@@ -9,6 +9,7 @@ pub mod durable;
 pub mod index;
 pub mod metrics;
 pub mod partitioned;
+pub mod server;
 pub mod pipeline;
 pub mod state;
 pub mod types;
