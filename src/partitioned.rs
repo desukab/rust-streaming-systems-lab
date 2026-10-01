@@ -38,7 +38,7 @@ pub struct PartitionedEngine {
 #[derive(Debug)]
 struct Command {
     event: Event,
-    done: oneshot::Sender<()>,
+    done: oneshot::Sender<bool>,
 }
 
 impl PartitionedEngine {
@@ -99,15 +99,17 @@ impl PartitionedEngine {
                         break;
                     }
 
+                    let mut applied = false;
                     if seen.insert(command.event.id) {
                         let previous = last_sequence.get(&command.event.key).copied();
                         if previous.is_none_or(|sequence| command.event.sequence >= sequence) {
                             state.apply(&command.event).await;
                             last_sequence.insert(command.event.key.clone(), command.event.sequence);
                             processed += 1;
+                            applied = true;
                         }
                     }
-                    let _ = command.done.send(());
+                    let _ = command.done.send(applied);
                 }
 
                 info!(
@@ -141,8 +143,9 @@ impl PartitionedEngine {
         let mut retried = 0_u64;
 
         for receiver in receivers {
-            let _ = receiver.await;
-            processed += 1;
+            if receiver.await.unwrap_or(false) {
+                processed += 1;
+            }
         }
 
         while let Some(result) = workers.join_next().await {
