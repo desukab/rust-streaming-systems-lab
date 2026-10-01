@@ -212,7 +212,13 @@ impl StreamingRuntime {
             return Err(SubmitError::Closed);
         }
 
-        if let Some(receiver) = receiver { let _ = receiver.await; }
+        if let Some(receiver) = receiver {
+            match receiver.await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => return Err(error),
+                Err(_) => return Err(SubmitError::Closed),
+            }
+        }
         Ok(())
     }
 
