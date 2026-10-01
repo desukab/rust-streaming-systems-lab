@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::{mpsc, oneshot};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -76,6 +76,7 @@ impl PartitionedEngine {
             workers.spawn(async move {
                 let mut processed = 0_u64;
         let mut seen = HashSet::new();
+                let mut last_sequence: HashMap<String, u64> = HashMap::new();
                 let mut retried = 0_u64;
 
                 while let Some(command) = rx.recv().await {
@@ -99,8 +100,12 @@ impl PartitionedEngine {
                     }
 
                     if seen.insert(command.event.id) {
-                        state.apply(&command.event).await;
-                        processed += 1;
+                        let previous = last_sequence.get(&command.event.key).copied();
+                        if previous.is_none_or(|sequence| command.event.sequence >= sequence) {
+                            state.apply(&command.event).await;
+                            last_sequence.insert(command.event.key.clone(), command.event.sequence);
+                            processed += 1;
+                        }
                     }
                     let _ = command.done.send(());
                 }
@@ -236,6 +241,18 @@ mod tests {
         assert_eq!(report.submitted, 2);
         assert_eq!(report.processed, 1);
         assert_eq!(engine.get("account-1").await.as_deref(), Some("first"));
+    }
+
+    #[tokio::test]
+    async fn out_of_order_event_does_not_overwrite_newer_state() {
+        let engine = PartitionedEngine::new(PartitionedConfig::default());
+        let newer = event(2, "account-1", "new");
+        let older = event(1, "account-1", "old");
+
+        let report = engine.run([newer, older]).await;
+
+        assert_eq!(report.processed, 1);
+        assert_eq!(engine.get("account-1").await.as_deref(), Some("new"));
     }
 
     #[tokio::test]
