@@ -28,7 +28,10 @@ impl IndexedState {
                 }
 
                 for token in tokens(&event.payload) {
-                    inverted.entry(token).or_default().insert(event.key.clone());
+                    inverted
+                        .entry(token)
+                        .or_default()
+                        .insert(event.key.clone());
                 }
             }
             EventKind::Delete => {
@@ -78,11 +81,7 @@ fn normalize(value: &str) -> String {
     value.to_ascii_lowercase()
 }
 
-fn remove_posting(
-    inverted: &mut HashMap<String, HashSet<String>>,
-    token: &str,
-    key: &str,
-) {
+fn remove_posting(inverted: &mut HashMap<String, HashSet<String>>, token: &str, key: &str) {
     if let Some(postings) = inverted.get_mut(token) {
         postings.remove(key);
         if postings.is_empty() {
@@ -114,8 +113,7 @@ mod tests {
             .apply(&event(1, EventKind::Insert, "a", "Rust Tokio"))
             .await;
 
-        let mut update = event(2, EventKind::Update, "a", "Rust streams");
-        update.sequence = 2;
+        let update = event(2, EventKind::Update, "a", "Rust streams");
         state.apply(&update).await;
 
         assert!(state.search("tokio").await.is_empty());
@@ -129,9 +127,7 @@ mod tests {
             .apply(&event(1, EventKind::Insert, "a", "bounded queue"))
             .await;
 
-        state
-            .apply(&event(2, EventKind::Delete, "a", ""))
-            .await;
+        state.apply(&event(2, EventKind::Delete, "a", "")).await;
 
         assert!(state.get("a").await.is_none());
         assert!(state.search("bounded").await.is_empty());
