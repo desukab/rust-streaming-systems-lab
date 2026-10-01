@@ -127,3 +127,61 @@ A good description of this repository is:
 
 It should **not** be described as previous production experience with
 technologies or companies that are not actually represented here.
+
+## Live query and streaming service
+
+The Axum server turns the library into a small continuously running service:
+
+    cargo run --bin server
+
+Endpoints:
+
+    GET  /health
+    POST /events
+    GET  /record/{key}
+    GET  /search?q=rust
+    WS   /ws
+
+POSTing an event updates the materialized state and publishes the same event to connected WebSocket clients. This makes the data path observable end to end instead of leaving the project as a batch-only benchmark.
+
+## Deterministic chain-like workload
+
+`simulator` generates reproducible slot/transaction/account/program events shaped like a blockchain indexing workload. It is explicitly a simulator, not a claim of Solana or EVM implementation.
+
+Run the benchmark with:
+
+    cargo bench --bench simulator
+
+## Recovery experiment
+
+Run:
+
+    cargo run --example recovery_lab
+
+This writes a durable event stream, processes a prefix, checkpoints it, constructs a fresh engine, and replays the remaining stream. See `docs/failure-lab.md`.
+
+## What I would build next
+
+- PostgreSQL-backed persistence with measured query plans
+- Redis cache with hit/miss and tail-latency measurements
+- Kafka/Redpanda ingestion with explicit offset semantics
+- WebSocket fan-out load test
+- CPU/allocation profiling and flamegraph analysis
+- property-based invariant testing
+- dynamic partition migration and checkpoint coordination
+
+These are deliberately listed as next experiments rather than presented as experience the repository does not contain.
+
+## Why this is a useful systems portfolio
+
+The project is designed to answer engineering questions with code and measurements:
+
+- Where does backpressure occur?
+- What state is ordered and what state is concurrent?
+- What happens when processing fails?
+- What survives a restart?
+- Which reads stay off the database?
+- What consistency guarantees does partitioning actually provide?
+- Where does latency come from?
+
+The goal is not to maximize technology keywords. The goal is to make the trade-offs visible, testable, and explainable.
