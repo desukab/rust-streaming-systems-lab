@@ -25,3 +25,7 @@ harness = false
 [[bench]]
 name = "partitioned"
 harness = false
+
+[[bench]]
+name = "simulator"
+harness = false
