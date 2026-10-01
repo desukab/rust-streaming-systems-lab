@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::index::IndexedState;
 use crate::metrics::RuntimeMetrics;
@@ -207,6 +207,7 @@ impl StreamingRuntime {
         drop(senders);
 
         if sender.send(command).await.is_err() {
+            self.metrics.dequeued();
             self.metrics.failed();
             return Err(SubmitError::Closed);
         }
