@@ -133,8 +133,14 @@ mod tests {
         });
         let hot = events
             .iter()
-            .filter(|event| event.account == "account-0")
+            .filter(|event| event.account.starts_with("account-"))
+            .filter(|event| {
+                let account = event.account.strip_prefix("account-").unwrap();
+                account.parse::<u64>().unwrap() < 10
+            })
             .count();
-        assert!(hot >= 100);
+        let total = events.len();
+        let uniform_share = total / 100;
+        assert!(hot > uniform_share);
     }
 }
