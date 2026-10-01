@@ -17,6 +17,6 @@ pub use durable::{Checkpoint, CheckpointStore, EventLog};
 pub use index::IndexedState;
 pub use partitioned::{stable_partition, PartitionedConfig, PartitionedEngine};
 pub use pipeline::{Pipeline, PipelineConfig};
+pub use state::StateStore;
 pub use types::PipelineReport;
 pub use types::{Event, EventKind, ProcessedEvent};
-pub use state::StateStore;
