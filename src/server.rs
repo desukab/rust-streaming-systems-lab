@@ -70,10 +70,7 @@ async fn health(State(app): State<AppState>) -> Json<Health> {
     })
 }
 
-async fn ingest(
-    State(app): State<AppState>,
-    Json(input): Json<NewEvent>,
-) -> impl IntoResponse {
+async fn ingest(State(app): State<AppState>, Json(input): Json<NewEvent>) -> impl IntoResponse {
     let id = app.next_id.fetch_add(1, Ordering::Relaxed);
     let event = Event {
         id,
@@ -90,18 +87,21 @@ async fn ingest(
     (StatusCode::ACCEPTED, Json(event))
 }
 
-async fn record(
-    State(app): State<AppState>,
-    Path(key): Path<String>,
-) -> impl IntoResponse {
+async fn record(State(app): State<AppState>, Path(key): Path<String>) -> impl IntoResponse {
     match app.state.get(&key).await {
-        Some(value) => (StatusCode::OK, Json(serde_json::json!({
-            "key": key,
-            "value": value,
-        }))),
-        None => (StatusCode::NOT_FOUND, Json(serde_json::json!({
-            "error": "record not found",
-        }))),
+        Some(value) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "key": key,
+                "value": value,
+            })),
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "record not found",
+            })),
+        ),
     }
 }
 
@@ -112,10 +112,7 @@ async fn search(
     Json(app.state.search(&query.q).await)
 }
 
-async fn websocket(
-    ws: WebSocketUpgrade,
-    State(app): State<AppState>,
-) -> impl IntoResponse {
+async fn websocket(ws: WebSocketUpgrade, State(app): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| websocket_session(socket, app.events.subscribe()))
 }
 
