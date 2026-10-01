@@ -62,11 +62,11 @@ impl Metrics {
         // The counter represents producer-outstanding work: buffered items plus
         // items already handed to workers. Saturation protects the metric if a
         // worker races the producer during shutdown.
-        let _ = self.queue_depth.fetch_update(
-            Ordering::Relaxed,
-            Ordering::Relaxed,
-            |value| Some(value.saturating_sub(1)),
-        );
+        let _ = self
+            .queue_depth
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                Some(value.saturating_sub(1))
+            });
     }
 }
 
@@ -200,7 +200,9 @@ mod tests {
             process_delay: Duration::from_micros(1),
         });
 
-        let report = pipeline.run((0..100).map(|id| event(id, id + 1, &format!("k-{id}")))).await;
+        let report = pipeline
+            .run((0..100).map(|id| event(id, id + 1, &format!("k-{id}"))))
+            .await;
 
         assert_eq!(report.submitted, 100);
         assert_eq!(report.processed, 100);
