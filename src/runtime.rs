@@ -10,7 +10,7 @@ use tracing::info;
 use crate::index::IndexedState;
 use crate::metrics::RuntimeMetrics;
 use crate::partitioned::stable_partition;
-use crate::types::{Event, EventKind};
+use crate::types::Event;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
