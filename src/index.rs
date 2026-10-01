@@ -29,9 +29,7 @@ impl IndexedState {
 
                 for token in tokens(&event.payload) {
                     inverted
-                        .entry(token)
-                        .or_default()
-                        .insert(event.key.clone());
+                         .entry(token).or_default().insert(event.key.clone());
                 }
             }
             EventKind::Delete => {
