@@ -33,7 +33,7 @@ impl Default for RuntimeConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum RuntimeStatus {
     Running,
     Draining,
