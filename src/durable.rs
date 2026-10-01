@@ -103,7 +103,7 @@ impl CheckpointStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{EventKind, Event};
+    use crate::types::{Event, EventKind};
 
     fn event(id: u64) -> Event {
         Event {
