@@ -107,6 +107,40 @@ bounded queue per partition. Benchmark numbers should be generated locally
 with cargo bench; no unmeasured throughput claim is hard-coded into this
 README.
 
+
+## Reproducible load result
+
+A release-mode load run was completed on the Azure development VM with the current
+runtime configuration:
+
+| Metric | Measured result |
+|---|---:|
+| Events | 16,000 |
+| Partitions | 16 |
+| Elapsed time | 2.673 s |
+| Throughput | 5,985 events/sec |
+| p50 completion latency | 1.097 ms |
+| p95 completion latency | 2.203 ms |
+| p99 completion latency | 3.300 ms |
+| Processed | 16,000 / 16,000 |
+| Retry-path executions | 328 |
+| Peak queue depth | 6 |
+| Keys | 10,000 |
+
+This is a **synthetic portfolio workload**, not a production benchmark or a claim
+about blockchain infrastructure performance. The numbers are recorded as an
+observed run so they can be reproduced and compared against future changes.
+
+The benchmark was run in release mode with the constrained build configuration
+used on the development VM:
+
+    CARGO_BUILD_JOBS=1
+    RUSTFLAGS="-C debuginfo=0"
+
+The repository's visual brand is **black + neon lime**. Portfolio-facing
+screenshots, benchmark cards, diagrams, and future documentation visuals should
+use that visual language consistently.
+
 ## Why this project exists
 
 The goal is to build hands-on evidence of systems thinking: where work is
