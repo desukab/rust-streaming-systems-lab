@@ -42,6 +42,14 @@ The queue is intentionally bounded. Tokio's documentation emphasizes that concur
 
 The binary emits a JSON report containing submitted/processed events, retries, observed outstanding queue depth, and final key count.
 
+## Long-running service example
+
+A small TCP ingestion service shows the same bounded-queue idea at a service boundary:
+
+    cargo run --example line_server
+
+It listens on 127.0.0.1:7000, accepts newline-delimited records, applies backpressure when the bounded channel is full, and shuts down cleanly on Ctrl-C.
+
 ## Test
 
     cargo fmt --check
