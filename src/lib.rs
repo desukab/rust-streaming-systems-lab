@@ -14,3 +14,8 @@ pub use types::PipelineReport;
 pub use types::{Event, EventKind, ProcessedEvent};
 
 pub use state::StateStore;
+
+pub mod index;
+pub mod partitioned;
+pub use index::IndexedState;
+pub use partitioned::{stable_partition, PartitionedConfig, PartitionedEngine};
