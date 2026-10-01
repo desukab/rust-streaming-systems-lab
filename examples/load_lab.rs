@@ -14,7 +14,7 @@ fn percentile(sorted: &[u64], p: f64) -> u64 {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let producers = std::env::var("PRODUCERS").ok().and_then(|v| v.parse().ok()).unwrap_or(8);
     let events_per_producer = std::env::var("EVENTS").ok().and_then(|v| v.parse().ok()).unwrap_or(2_000);
     let partitions = std::env::var("PARTITIONS").ok().and_then(|v| v.parse().ok()).unwrap_or(16);
