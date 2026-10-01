@@ -7,75 +7,123 @@ This is **not** a copy of an Axiom system and does not claim prior production ex
 ## What it demonstrates
 
 - async Rust with Tokio
-- bounded mpsc channels and explicit backpressure
-- concurrent worker pools
-- shared in-memory state with RwLock
+- bounded message channels and explicit backpressure
+- fixed-key partitioning with deterministic FNV-1a routing
+- one ordered consumer per partition with cross-partition concurrency
+- concurrent materialized state using RwLock
+- an in-memory inverted index with update/delete consistency
 - deterministic retry/failure injection
+- append-only JSON event log and atomic checkpoint files
 - graceful producer/worker shutdown
 - ownership-safe task spawning
-- atomic runtime metrics
+- atomic runtime metrics and queue-depth accounting primitives
 - unit and integration-style async tests
-- a Criterion benchmark target
+- Criterion throughput benchmarks
 - CI with formatting, linting, tests, and a release build
 
 ## Architecture
 
     event source
         |
-        v
-    bounded Tokio mpsc queue  <--- backpressure boundary
+        +---- append-only event log
         |
-        +---- worker 0 ----+
-        +---- worker 1 ----+----> concurrent state store
-        +---- worker 2 ----+
-        +---- worker N ----+
-                  |
-                  +---- deterministic retry path
-                  |
-                  +---- metrics/report
+        v
+    stable_partition(key)
+        |
+        +---- bounded queue ---- worker 0 ----+
+        +---- bounded queue ---- worker 1 ----+----> materialized state
+        +---- bounded queue ---- worker N ----+          |
+                                                     inverted index
+                                                          |
+                                                     checkpoint
 
-The queue is intentionally bounded. Tokio's documentation emphasizes that concurrency and queuing should be explicitly bounded so a producer cannot grow an unbounded backlog and exhaust memory. This lab follows that principle.
+The queue is intentionally bounded. A producer that reaches capacity must
+await the channel instead of creating an unbounded heap backlog.
+
+The partition boundary is a deliberate consistency/concurrency trade-off:
+events for one logical key are routed to one partition, giving that key a
+single ordered consumer while unrelated keys can be processed concurrently.
+
+## Durability model
+
+EventLog provides an append-only newline-delimited JSON log.
+
+CheckpointStore writes one checkpoint per partition through a temporary file
+followed by rename. Together they provide the primitives for replay-based
+recovery:
+
+1. append events to the log;
+2. process them through the normal partition path;
+3. record the latest applied sequence per partition;
+4. after restart, replay records newer than the checkpoint.
+
+See docs/recovery.md.
+
+This is intentionally **not** presented as a production WAL. The lab does not
+claim distributed consensus, exactly-once semantics, crash-consistent
+multi-file transactions, dynamic partition rebalancing, or state migration.
+
+## Queryable state
+
+IndexedState maintains:
+
+- a key/value materialized view;
+- a token to keys inverted index.
+
+Updates remove stale postings before adding new ones. Deletes remove both the
+record and its postings, so queries do not return deleted state.
 
 ## Run
 
     cargo run --release
 
-The binary emits a JSON report containing submitted/processed events, retries, observed outstanding queue depth, and final key count.
+The binary emits a JSON report containing submitted/processed events, retries,
+observed outstanding queue depth, and final key count.
 
 ## Long-running service example
 
-A small TCP ingestion service shows the same bounded-queue idea at a service boundary:
+A small TCP ingestion service shows the bounded-queue idea at a service
+boundary:
 
     cargo run --example line_server
 
-It listens on 127.0.0.1:7000, accepts newline-delimited records, applies backpressure when the bounded channel is full, and shuts down cleanly on Ctrl-C.
+It listens on 127.0.0.1:7000, accepts newline-delimited records, applies
+backpressure when its bounded channel is full, and shuts down cleanly on
+Ctrl-C.
 
 ## Test
 
     cargo fmt --check
     cargo clippy --all-targets --all-features -- -D warnings
     cargo test --all-targets --all-features
+    cargo build --release
 
 ## Benchmark
 
     cargo bench
 
+The partitioned benchmark drives 20,000 events through 16 partitions with a
+bounded queue per partition. Benchmark numbers should be generated locally
+with cargo bench; no unmeasured throughput claim is hard-coded into this
+README.
+
 ## Why this project exists
 
-The goal is to build hands-on evidence of systems thinking: where work is queued, how concurrency is bounded, how shared state is protected, what happens when work fails, and how the service shuts down.
+The goal is to build hands-on evidence of systems thinking: where work is
+queued, how concurrency is bounded, how ownership and locks affect state,
+what happens when work fails, how state can be rebuilt after restart, and how
+the service shuts down.
 
-The design is deliberately small enough to audit end-to-end rather than hiding behavior behind a framework.
-
-## Open-source learning notes
-
-The project uses Tokio rather than reimplementing an async runtime. Its design is informed by the public Tokio tutorials on channels, streams, bounded queues, and asynchronous task scheduling. The implementation in this repository is original portfolio code.
-
-Tokio's public channel tutorial covers bounded channels and backpressure; its streams tutorial covers asynchronous streams and adapters.
+The design is deliberately small enough to audit end-to-end rather than hiding
+behavior behind a framework.
 
 ## Portfolio honesty
 
-This repository should be described as:
+A good description of this repository is:
 
-> Independent Rust systems engineering project exploring async streaming, bounded backpressure, concurrent state, retries, and fault handling.
+> Independent Rust systems engineering project exploring async streaming,
+> bounded backpressure, deterministic partitioning, concurrent materialized
+> state, indexing, retries, durability primitives, and recovery design.
 
-It should **not** be described as previous production experience with technologies or companies that are not actually represented here.
+It should **not** be described as previous production experience with
+technologies or companies that are not actually represented here.
